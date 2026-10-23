@@ -52,7 +52,9 @@ in a second browser window or another device on your network).
 3. Redeploy. Create a game, share the link, play.
 
 Redis is needed because Vercel's serverless functions don't share memory. Clients poll for updates every
-1.5 seconds (a single cheap version check unless something changed). Games expire after 30 days.
+1.5 seconds while the tab is visible (a single cheap version check unless something changed),
+slow to every 4 seconds after two quiet minutes, pause while the tab is hidden, and stop when the game ends.
+Games with no moves for 7 days are deleted automatically (Redis TTL, reset on every move).
 
 ## Admin
 

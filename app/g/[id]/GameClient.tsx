@@ -101,27 +101,42 @@ export function GameClient({ id }: { id: string }) {
       headers: token ? { "x-player-token": token } : {},
       cache: "no-store",
     });
-    if (res.status === 404) return setNotFound(true);
-    if (!res.ok) return;
+    if (res.status === 404) {
+      setNotFound(true);
+      return "stop";
+    }
+    if (!res.ok) return "same";
     const data = await res.json();
-    if (data.game) applyView(data.game);
+    if (!data.game) return "same";
+    applyView(data.game);
+    return data.game.status === "finished" ? "stop" : "changed";
   }, [id, token, applyView]);
 
+  // Polling keeps free-tier usage low: it pauses while the tab is hidden (refreshing as soon as
+  // it's visible again), slows down when nothing has happened for a while, and stops once the
+  // game is over.
   useEffect(() => {
     versionRef.current = null;
     let stop = false;
+    let gen = 0;
+    let quietSince = Date.now();
     let timer: ReturnType<typeof setTimeout>;
-    const loop = async () => {
+    const loop = async (myGen: number) => {
+      let result: "changed" | "same" | "stop" = "same";
       try {
-        await poll();
+        result = await poll();
       } catch {}
-      if (!stop) timer = setTimeout(loop, document.hidden ? 5000 : 1500);
+      if (stop || myGen !== gen || result === "stop" || document.hidden) return;
+      if (result === "changed") quietSince = Date.now();
+      const delay = Date.now() - quietSince > 120_000 ? 4000 : 1500;
+      timer = setTimeout(() => loop(myGen), delay);
     };
-    loop();
+    loop(gen);
     const onVis = () => {
+      clearTimeout(timer);
       if (!document.hidden) {
-        clearTimeout(timer);
-        loop();
+        quietSince = Date.now();
+        loop(++gen);
       }
     };
     document.addEventListener("visibilitychange", onVis);

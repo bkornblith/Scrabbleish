@@ -12,11 +12,18 @@ if (!redis && process.env.VERCEL) {
   console.error("No Redis configured: add the Upstash Redis integration to this Vercel project.");
 }
 
-const TTL_SECONDS = 60 * 60 * 24 * 30;
+// A game is deleted automatically after 7 days without any move (every save resets the clock).
+const TTL_SECONDS = 60 * 60 * 24 * 7;
 const key = (id: string) => `scrabble:game:${id}`;
 
-const mem: Map<string, { v: number; data: string }> =
-  ((globalThis as unknown as { __scrabbleMem?: Map<string, { v: number; data: string }> }).__scrabbleMem ??= new Map());
+type MemEntry = { v: number; data: string; savedAt: number };
+const mem: Map<string, MemEntry> = ((globalThis as unknown as { __scrabbleMem?: Map<string, MemEntry> }).__scrabbleMem ??= new Map());
+
+/** Same 7-day expiry for the in-memory fallback. */
+function pruneMem() {
+  const cutoff = Date.now() - TTL_SECONDS * 1000;
+  for (const [id, e] of mem) if (e.savedAt < cutoff) mem.delete(id);
+}
 
 // Compare-and-set: only write if the stored version is still the one we read.
 const CAS = `
@@ -29,6 +36,7 @@ return 1
 
 export async function loadGame(id: string): Promise<Game | null> {
   if (!redis) {
+    pruneMem();
     const e = mem.get(id);
     return e ? (JSON.parse(e.data) as Game) : null;
   }
@@ -37,7 +45,10 @@ export async function loadGame(id: string): Promise<Game | null> {
 }
 
 export async function loadVersion(id: string): Promise<number | null> {
-  if (!redis) return mem.get(id)?.v ?? null;
+  if (!redis) {
+    pruneMem();
+    return mem.get(id)?.v ?? null;
+  }
   const v = await redis.hget<string>(key(id), "v");
   return v == null ? null : Number(v);
 }
@@ -50,7 +61,7 @@ export async function saveGame(game: Game, expectedVersion: number): Promise<boo
   if (!redis) {
     const cur = mem.get(game.id)?.v ?? -1;
     if (cur !== expectedVersion) return false;
-    mem.set(game.id, { v: next, data });
+    mem.set(game.id, { v: next, data, savedAt: Date.now() });
     return true;
   }
   const ok = await redis.eval(CAS, [key(game.id)], [String(expectedVersion), String(next), data, String(TTL_SECONDS)]);
@@ -75,7 +86,10 @@ export class NotFound extends Error {}
 
 /** Every stored game. Used only by the admin page, so a full scan is fine. */
 export async function listGames(): Promise<Game[]> {
-  if (!redis) return [...mem.values()].map((e) => JSON.parse(e.data) as Game);
+  if (!redis) {
+    pruneMem();
+    return [...mem.values()].map((e) => JSON.parse(e.data) as Game);
+  }
   const keys: string[] = [];
   let cursor = "0";
   do {

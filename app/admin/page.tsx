@@ -142,7 +142,7 @@ export default function Admin() {
         </button>
       </div>
       {error && <p className="error">{error}</p>}
-      <p className={s.note}>Games with no activity for 30 days are also removed automatically.</p>
+      <p className={s.note}>Games with no moves for 7 days are also removed automatically.</p>
 
       {all.length === 0 ? (
         <p className={s.note}>{games ? "No games stored." : "Loading…"}</p>

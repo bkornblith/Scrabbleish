@@ -91,7 +91,7 @@ export default function Admin() {
   const topbar = (
     <div className="topbar">
       <Link href="/" className="brand">
-        <img className="brand-mark" src="/icon.svg" alt="" />
+        <img className="brand-mark" src="/logo.svg" alt="" />
         <span className="brand-name">Scrabbleish</span>
       </Link>
       <span className="pill">Admin</span>
@@ -168,7 +168,7 @@ export default function Admin() {
 
         {all.length === 0 ? (
           <div className={s.empty}>
-            <img src="/icon.svg" alt="" width={56} height={56} />
+            <img src="/logo.svg" alt="" width={56} height={56} />
             <p>{games ? "No games stored. Everything is tidy." : "Loading…"}</p>
           </div>
         ) : (

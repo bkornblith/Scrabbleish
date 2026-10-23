@@ -1,0 +1,26 @@
+.wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+.login {
+  max-width: 320px; margin: 10vh auto; display: flex; flex-direction: column; gap: 12px;
+  background: var(--card, #fff); border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 24px;
+}
+.login label { display: flex; flex-direction: column; gap: 6px; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.head h1 { margin: 0; }
+.actions { display: flex; gap: 8px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 8px; }
+.note { color: var(--muted, #777); font-size: 13px; margin: 4px 0 12px; }
+.tableWrap { overflow-x: auto; background: var(--card, #fff); border: 1px solid var(--line, #ddd); border-radius: 12px; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line, #ddd); white-space: nowrap; }
+.table td:nth-child(5) { white-space: normal; min-width: 160px; }
+.table th { font-weight: 600; color: var(--muted, #777); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.table tr:last-child td { border-bottom: none; }
+.sel td { background: color-mix(in srgb, var(--danger, #b3261e) 8%, transparent); }
+.idle { color: var(--warn, #b26a00); }
+.stale { color: var(--danger, #b3261e); font-weight: 600; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line, #ddd); }
+.lobby { color: var(--muted, #777); }
+.playing { color: var(--accent, #1f6f4a); border-color: currentColor; }
+.finished { color: var(--muted, #777); background: var(--line, #eee); }
+.danger { color: var(--danger, #b3261e); border-color: var(--danger, #b3261e); }
+.danger:disabled { opacity: 0.4; }

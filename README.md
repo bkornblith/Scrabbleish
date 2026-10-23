@@ -53,6 +53,12 @@ in a second browser window or another device on your network).
 Redis is needed because Vercel's serverless functions don't share memory. Clients poll for updates every
 1.5 seconds (a single cheap version check unless something changed). Games expire after 30 days.
 
+## Admin
+
+`/admin` lists every stored game with its last activity, so stale games are easy to spot and delete.
+The password comes from the `ADMIN_PASSWORD` env var and defaults to `admin`; set it in Vercel
+(**Settings → Environment Variables**) to something else before sharing the site widely.
+
 ## Layout
 
 - `lib/constants.ts`: board layout, tile values, distribution

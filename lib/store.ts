@@ -70,3 +70,29 @@ export async function updateGame<T>(id: string, fn: (game: Game) => T): Promise<
 }
 
 export class NotFound extends Error {}
+
+// ---------- admin ----------
+
+/** Every stored game. Used only by the admin page, so a full scan is fine. */
+export async function listGames(): Promise<Game[]> {
+  if (!redis) return [...mem.values()].map((e) => JSON.parse(e.data) as Game);
+  const keys: string[] = [];
+  let cursor = "0";
+  do {
+    const [next, batch] = await redis.scan(cursor, { match: key("*"), count: 200 });
+    cursor = String(next);
+    keys.push(...batch);
+  } while (cursor !== "0");
+  if (!keys.length) return [];
+  const pipe = redis.pipeline();
+  for (const k of keys) pipe.hget(k, "data");
+  const rows = (await pipe.exec()) as (string | null)[];
+  return rows.filter((d): d is string => !!d).map((d) => JSON.parse(d) as Game);
+}
+
+/** Deletes the given games and returns how many existed. */
+export async function deleteGames(ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  if (!redis) return ids.filter((id) => mem.delete(id)).length;
+  return redis.del(...ids.map(key));
+}

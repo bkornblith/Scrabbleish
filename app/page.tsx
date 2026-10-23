@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CAST } from "./g/[id]/Celebration";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/engine";
 import { SettingsForm } from "./SettingsForm";
 import { ThemeToggle } from "./ThemeToggle";
@@ -13,6 +14,7 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [Pig, , Penguin] = CAST.map((c) => c.Comp);
 
   async function create() {
     setBusy(true);
@@ -40,14 +42,15 @@ export default function Home() {
       </div>
       <h1 className="logo">
         {"SCRABBLEISH".split("").map((l, i) => (
-          <span key={i} className="tile logo-tile">
+          <span key={i} className={`tile logo-tile${i === 8 ? " pig-tile" : ""}`}>
             <span className="letter">{l}</span>
+            {i === 8 && <span className="pig-face"><Pig /></span>}
           </span>
         ))}
       </h1>
-
       <div className="home-grid">
-      <section className="card">
+      <section className="card peek-host">
+        <span className="peeker peek-pig" aria-hidden><span className="peek-body"><Pig /></span></span>
         <h2>New game</h2>
         <label>
           Your name
@@ -60,7 +63,8 @@ export default function Home() {
         {error && <p className="error">{error}</p>}
       </section>
 
-      <section className="card">
+      <section className="card peek-host">
+        <span className="peeker peek-penguin" aria-hidden><span className="peek-body"><Penguin /></span></span>
         <h2>Join a game</h2>
         <form
           onSubmit={(e) => {
@@ -74,6 +78,7 @@ export default function Home() {
           </label>
           <button type="submit" disabled={!code.trim()}>Go to game</button>
         </form>
+        <p className="peek-hint">🐷 Psst… play a bingo and we come out to dance.</p>
       </section>
       </div>
     </main>

@@ -97,7 +97,7 @@ function SkateLlama() {
   );
 }
 
-const CAST = [
+export const CAST = [
   { name: "unicorn pig", Comp: UnicornPig },
   { name: "disco sloth", Comp: DiscoSloth },
   { name: "tap-dancing penguin", Comp: Penguin },

@@ -247,7 +247,7 @@ function Lobby({ view, act, busy, error }: { view: GameView; act: Act; busy: boo
     <main className="home">
       <div className="topbar">
         <Link href="/" className="brand">
-          <span className="brand-mark">S</span>
+          <img className="brand-mark" src="/icon.svg" alt="" />
           <span className="brand-name">Scrabbleish</span>
         </Link>
         <span className="sp" />
@@ -628,7 +628,7 @@ function Table({
     <main className="table" onDragStart={(e) => e.preventDefault()}>
       <header className="topbar">
         <Link href="/" className="brand">
-          <span className="brand-mark">S</span>
+          <img className="brand-mark" src="/icon.svg" alt="" />
           <span className="brand-name">Scrabbleish</span>
         </Link>
         <span className="pill">Game {view.id}</span>

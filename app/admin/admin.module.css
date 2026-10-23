@@ -1,26 +1,73 @@
-.wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
-.login {
-  max-width: 320px; margin: 10vh auto; display: flex; flex-direction: column; gap: 12px;
-  background: var(--card, #fff); border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 24px;
-}
-.login label { display: flex; flex-direction: column; gap: 6px; }
-.head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.head h1 { margin: 0; }
-.actions { display: flex; gap: 8px; }
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 8px; }
-.note { color: var(--muted, #777); font-size: 13px; margin: 4px 0 12px; }
-.tableWrap { overflow-x: auto; background: var(--card, #fff); border: 1px solid var(--line, #ddd); border-radius: 12px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 14px 16px 48px; }
+.login { max-width: 380px; margin: 8vh auto 0; padding: 24px; display: flex; flex-direction: column; }
+.login h2 { margin-bottom: 4px; }
+.login p { margin: 0 0 18px; }
+.login button { padding: 12px; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; }
+.statNum { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.statLabel { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.stat:first-child .statNum { color: var(--accent); }
+
+.panel { padding: 0; overflow: hidden; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.toolbar :global(.sp) { flex: 1; }
+.toolbar :global(.btn) { padding: 8px 14px; }
+.toolLabel { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-right: 2px; }
+.panel > :global(.error) { padding: 0 16px; }
+
+.tableWrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.table th, .table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line, #ddd); white-space: nowrap; }
-.table td:nth-child(5) { white-space: normal; min-width: 160px; }
-.table th { font-weight: 600; color: var(--muted, #777); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+.table th, .table td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.table th { font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+.table th:first-child, .table td:first-child { padding-left: 16px; width: 1%; }
+.table td:last-child { text-align: right; padding-right: 12px; }
+.table tbody tr { cursor: pointer; transition: background 0.12s; }
+.table tbody tr:hover { background: var(--chip); }
 .table tr:last-child td { border-bottom: none; }
-.sel td { background: color-mix(in srgb, var(--danger, #b3261e) 8%, transparent); }
-.idle { color: var(--warn, #b26a00); }
-.stale { color: var(--danger, #b3261e); font-weight: 600; }
-.badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line, #ddd); }
-.lobby { color: var(--muted, #777); }
-.playing { color: var(--accent, #1f6f4a); border-color: currentColor; }
-.finished { color: var(--muted, #777); background: var(--line, #eee); }
-.danger { color: var(--danger, #b3261e); border-color: var(--danger, #b3261e); }
-.danger:disabled { opacity: 0.4; }
+.table input[type="checkbox"] { width: 16px; height: 16px; padding: 0; accent-color: var(--accent); cursor: pointer; }
+.sel, .sel:hover { background: var(--accent-soft) !important; }
+
+.code { font-family: "Space Grotesk", ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-decoration: none; }
+.code:hover { text-decoration: underline; }
+.idle { color: var(--warn); font-weight: 600; }
+.stale { color: var(--danger); font-weight: 700; }
+
+.status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--muted); text-transform: capitalize; }
+.status::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; }
+.playing { background: var(--accent-soft); color: var(--accent); }
+.lobby { color: var(--warn); }
+.finished { opacity: 0.8; }
+
+.players { white-space: normal !important; }
+.player { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 8px; border-radius: 8px; background: var(--chip); font-size: 13px; }
+.player b { font-weight: 700; color: var(--muted); margin-left: 2px; font-variant-numeric: tabular-nums; }
+
+.rowDelete {
+  width: 30px; height: 30px; border-radius: 9px; border: 1px solid transparent; background: transparent;
+  color: var(--muted); cursor: pointer; transition: all 0.12s;
+}
+.rowDelete:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+.empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 48px 16px; color: var(--muted); }
+.empty img { animation: bob 2.4s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
+.note { color: var(--muted); font-size: 13px; text-align: center; margin: 14px 0 0; }
+
+/* Phones: each game becomes a small card. */
+@media (max-width: 700px) {
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .statNum { font-size: 24px; }
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; }
+  .table tr { position: relative; padding: 12px 16px 12px 48px; border-bottom: 1px solid var(--line); }
+  .table td { border: 0; padding: 2px 0; white-space: normal; }
+  .table td:first-child { position: absolute; left: 16px; top: 14px; padding: 0; width: auto; }
+  .table td:last-child { position: absolute; right: 10px; top: 8px; padding: 0; }
+  .table td[data-label="Moves"]::before, .table td[data-label="Created"]::before, .table td[data-label="Last move"]::before {
+    content: attr(data-label) ": "; color: var(--muted); font-size: 12px;
+  }
+  .table td[data-label="Status"] { position: absolute; right: 48px; top: 12px; padding: 0; }
+  .table td[data-label="Moves"], .table td[data-label="Created"] { display: inline-block; margin-right: 12px; font-size: 13px; }
+}

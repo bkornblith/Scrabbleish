@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Scrabble with Friends",
+  title: "Scrabbleish",
+  applicationName: "Scrabbleish",
+  appleWebApp: { title: "Scrabbleish" },
   description: "Multiplayer Scrabble for 2–5 players with official rules and challenges.",
 };
 

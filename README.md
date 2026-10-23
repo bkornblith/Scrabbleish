@@ -46,7 +46,8 @@ in a second browser window or another device on your network).
 1. In Vercel, **Add New → Project** and import this GitHub repo (framework: Next.js, no settings to change).
 2. In the project, open **Storage → Create Database → Upstash for Redis** (free tier is plenty) and connect it
    to the project. This adds `KV_REST_API_URL` / `KV_REST_API_TOKEN` automatically.
-   (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` also work.)
+   (`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` also work.) Leave the env var prefix as the
+   default; a custom prefix renames the variables and the app won't find them.
 3. Redeploy. Create a game, share the link, play.
 
 Redis is needed because Vercel's serverless functions don't share memory. Clients poll for updates every

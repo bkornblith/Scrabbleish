@@ -502,3 +502,36 @@ button.primary:disabled, .btn.primary:disabled { background: var(--chip); color:
 @media (prefers-reduced-motion: reduce) { .peek-body, .pig-face, .pig-tile .letter { animation: none !important; } }
 .home:has(.peeker) .logo { margin-bottom: 52px; }
 @media (max-width: 899px) { .home:has(.peeker) .peek-host + .peek-host { margin-top: 64px; } }
+
+/* ---------- phone home: fit one screen ---------- */
+.home-tabs, .rules-toggle { display: none; }
+@media (max-width: 520px) {
+  .home { padding-top: 10px; padding-bottom: 16px; }
+  .home .home-top { position: absolute; top: 10px; right: 12px; margin: 0; }
+  .home .home-top .pill, .home .home-top button { padding: 6px 10px; font-size: 12px; }
+  .home .logo { margin-top: 48px; gap: 3px; }
+  .home .logo-tile { width: 28px; height: 28px; font-size: 15px; border-radius: 6px; }
+  .home .peeker { width: 72px; height: 48px; }
+  .home .peek-penguin { width: 54px; }
+  .home .card { padding: 16px; margin-bottom: 12px; }
+  .home .card h2 { font-size: 20px; margin-bottom: 10px; }
+  .home label { margin-bottom: 12px; }
+  .home .peek-hint { display: none; }
+
+  .home .rules-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 12px; padding: 12px 14px; border-radius: 12px;
+    background: var(--chip); border: 1px solid var(--line); color: var(--muted); font-size: 14px; cursor: pointer;
+  }
+  .home .rules-toggle b { color: var(--ink); }
+  .home .rules-change { margin-left: auto; color: var(--accent); font-weight: 600; }
+  .home .rules-body:not(.open) { display: none; }
+
+  /* Tabs: one card at a time */
+  .home .home-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 40px; border-radius: 14px; background: var(--chip); }
+  .home:has(.peeker) .logo { margin-bottom: 14px; }
+  .home .home-tabs button { flex: 1; margin: 0; padding: 9px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); box-shadow: none; }
+  .home .home-tabs button.on { background: var(--panel); background-color: var(--bg); color: var(--ink); box-shadow: var(--sh); }
+  .home .tab-off { display: none; }
+  .home .peek-host + .peek-host { margin-top: 0 !important; }
+
+}

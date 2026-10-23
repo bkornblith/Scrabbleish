@@ -15,6 +15,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [Pig, , Penguin] = CAST.map((c) => c.Comp);
+  const [tab, setTab] = useState<"new" | "join">("new");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const official = JSON.stringify(settings) === JSON.stringify(DEFAULT_SETTINGS);
 
   async function create() {
     setBusy(true);
@@ -48,22 +51,33 @@ export default function Home() {
           </span>
         ))}
       </h1>
+      <div className="home-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "new"} className={tab === "new" ? "on" : ""} onClick={() => setTab("new")}>New game</button>
+        <button role="tab" aria-selected={tab === "join"} className={tab === "join" ? "on" : ""} onClick={() => setTab("join")}>Join a game</button>
+      </div>
       <div className="home-grid">
-      <section className="card peek-host">
+      <section className={`card peek-host new-card${tab === "new" ? "" : " tab-off"}`}>
         <span className="peeker peek-pig" aria-hidden><span className="peek-body"><Pig /></span></span>
         <h2>New game</h2>
         <label>
           Your name
           <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ben" />
         </label>
-        <SettingsForm settings={settings} onChange={setSettings} />
+        <button type="button" className="rules-toggle" aria-expanded={rulesOpen} onClick={() => setRulesOpen(!rulesOpen)}>
+          <span>Rules</span>
+          <b>{official ? "Official" : "Custom"}</b>
+          <span className="rules-change">{rulesOpen ? "Hide ▴" : "Change ▾"}</span>
+        </button>
+        <div className={`rules-body${rulesOpen ? " open" : ""}`}>
+          <SettingsForm settings={settings} onChange={setSettings} />
+        </div>
         <button className="primary" disabled={busy || !name.trim()} onClick={create}>
           Create game
         </button>
         {error && <p className="error">{error}</p>}
       </section>
 
-      <section className="card peek-host">
+      <section className={`card peek-host join-card${tab === "join" ? "" : " tab-off"}`}>
         <span className="peeker peek-penguin" aria-hidden><span className="peek-body"><Penguin /></span></span>
         <h2>Join a game</h2>
         <form
@@ -72,7 +86,7 @@ export default function Home() {
             if (code.trim()) router.push(`/g/${code.trim().toUpperCase()}`);
           }}
         >
-          <label>
+          <label className="code-label">
             Game code
             <input value={code} maxLength={6} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ABC123" />
           </label>

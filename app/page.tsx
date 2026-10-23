@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/engine";
 import { SettingsForm } from "./SettingsForm";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default function Home() {
   const router = useRouter();
@@ -34,9 +35,14 @@ export default function Home() {
 
   return (
     <main className="home">
+      <div className="home-top">
+        <ThemeToggle />
+      </div>
       <h1 className="logo">
-        {"SCRABBLE".split("").map((l, i) => (
-          <span key={i} className="tile logo-tile">{l}</span>
+        {"SCRABBLEISH".split("").map((l, i) => (
+          <span key={i} className="tile logo-tile">
+            <span className="letter">{l}</span>
+          </span>
         ))}
       </h1>
       <p className="tagline">Official rules · 2–5 players · Challenge phony words</p>

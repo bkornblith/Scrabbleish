@@ -6,10 +6,27 @@ import { BOARD_SIZE, LETTER_VALUES, PREMIUMS, RACK_SIZE, type Premium } from "@/
 import { analyzePlay, idx, type BoardTile, type GameView, type Settings, type Tile } from "@/lib/engine";
 import { SettingsForm } from "../../SettingsForm";
 import { Celebration, type CelebrationEvent } from "./Celebration";
+import { ThemeToggle } from "../../ThemeToggle";
 
 type Placed = { tileId: string; letter: string; blank: boolean };
+type DropTarget = { cell: number } | { rackIdx: number } | null;
+type Drag = {
+  tileId: string;
+  letter: string;
+  blank: boolean;
+  fromCell: number | null;
+  x: number;
+  y: number;
+  grabX: number;
+  grabY: number;
+  lift: number; // extra upward offset on touch so the finger doesn't hide the tile
+  over: DropTarget;
+};
 
-const PREMIUM_LABEL: Record<NonNullable<Premium>, string> = { TW: "TRIPLE WORD", DW: "DOUBLE WORD", TL: "TRIPLE LETTER", DL: "DOUBLE LETTER" };
+const PREMIUM_LABEL: Record<NonNullable<Premium>, string> = { TW: "Triple word", DW: "Double word", TL: "Triple letter", DL: "Double letter" };
+const AVATAR_COLORS = ["#6366f1", "#e11d48", "#0d9488", "#d97706", "#7c3aed"];
+
+type ConfirmBox = { title: string; body?: string; ok: string; danger?: boolean; onOk: () => void };
 
 export function GameClient({ id }: { id: string }) {
   const tokenKey = `scrabble-token-${id}`;
@@ -37,11 +54,13 @@ export function GameClient({ id }: { id: string }) {
   }, [tokenKey]);
 
   // Preview the animations with ?celebrate=bingo or ?celebrate=win.
+  const loaded = !!view;
   useEffect(() => {
+    if (!loaded) return;
     const demo = new URLSearchParams(window.location.search).get("celebrate");
     if (demo === "bingo") setCelebration({ kind: "bingo", title: "BINGO! Preview played RETAINS for 64", key: Date.now() });
     if (demo === "win") setCelebration({ kind: "win", title: "🏆 Preview wins!", key: Date.now() });
-  }, []);
+  }, [loaded]);
 
   const toggleCelebrate = useCallback(() => {
     const next = !celebrateRef.current;
@@ -183,7 +202,14 @@ function Lobby({ view, act, busy, error }: { view: GameView; act: Act; busy: boo
 
   return (
     <main className="home">
-      <Link href="/" className="back">← Home</Link>
+      <div className="topbar">
+        <Link href="/" className="brand">
+          <span className="brand-mark">S</span>
+          <span className="brand-name">Scrabbleish</span>
+        </Link>
+        <span className="sp" />
+        <ThemeToggle />
+      </div>
       <section className="card">
         <h2>Game {view.id}</h2>
         <p>Share this link with up to {5 - view.players.length} more player{5 - view.players.length === 1 ? "" : "s"}:</p>
@@ -201,8 +227,11 @@ function Lobby({ view, act, busy, error }: { view: GameView; act: Act; busy: boo
         </div>
         <h3>Players ({view.players.length}/5)</h3>
         <ul className="players-list">
-          {view.players.map((p) => (
+          {view.players.map((p, i) => (
             <li key={p.id}>
+              <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                {p.name.slice(0, 1).toUpperCase()}
+              </span>
               {p.name}
               {p.id === view.hostId && <span className="badge">host</span>}
               {p.id === view.you?.id && <span className="badge you">you</span>}
@@ -288,7 +317,14 @@ function Table({
   const [exchangeMode, setExchangeMode] = useState(false);
   const [exchangeSel, setExchangeSel] = useState<Set<string>>(new Set());
   const [blankAt, setBlankAt] = useState<{ cell: number; tileId: string } | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [snapCell, setSnapCell] = useState<number | null>(null);
+  const [confirmBox, setConfirmBox] = useState<ConfirmBox | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const pressRef = useRef<{ tileId: string; fromCell: number | null; x: number; y: number; rect: DOMRect; touch: boolean } | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const suppressClickRef = useRef(false);
+  const dropRef = useRef<(d: Drag, target: DropTarget) => void>(() => {});
 
   // Keep local rack order and tentative placements in sync with the server rack and board.
   useEffect(() => {
@@ -336,7 +372,8 @@ function Table({
   const mustAccept = myTurn && !!view.pending?.wentOut;
 
   function placeTile(cell: number, tileId: string) {
-    if (view.board[cell] || !myTurn || exchangeMode) return;
+    if (view.board[cell] || exchangeMode) return;
+    if (placed.has(cell) && placed.get(cell)!.tileId !== tileId) return;
     const t = rackById.get(tileId);
     if (!t) return;
     setPlaced((prev) => {
@@ -350,9 +387,129 @@ function Table({
       return next;
     });
     setSelected(null);
+    setSnapCell(cell);
+  }
+
+  function returnToRack(tileId: string, rackIdx?: number) {
+    setPlaced((prev) => {
+      const next = new Map([...prev].filter(([, p]) => p.tileId !== tileId));
+      return next.size === prev.size ? prev : next;
+    });
+    if (rackIdx == null) return;
+    setOrder((o) => {
+      // rackIdx counts visible rack tiles (excluding the dragged one).
+      const visible = o.filter((id) => id !== tileId && !placedIds.has(id));
+      visible.splice(Math.min(rackIdx, visible.length), 0, tileId);
+      return [...visible, ...o.filter((id) => id !== tileId && placedIds.has(id))];
+    });
+  }
+
+  dropRef.current = (d, target) => {
+    if (target && "cell" in target) {
+      if (target.cell === d.fromCell) return setSnapCell(target.cell);
+      if (!view.board[target.cell] && !placed.has(target.cell)) return placeTile(target.cell, d.tileId);
+      return; // occupied: tile springs back where it came from
+    }
+    if (target && "rackIdx" in target) return returnToRack(d.tileId, target.rackIdx);
+    if (d.fromCell != null) returnToRack(d.tileId);
+  };
+
+  // Pointer-based dragging (mouse, pen and touch) with a lifted tile that follows the pointer.
+  useEffect(() => {
+    const hit = (x: number, y: number): DropTarget => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      const sq = el?.closest<HTMLElement>("[data-cell]");
+      if (sq) return { cell: Number(sq.dataset.cell) };
+      const rack = el?.closest<HTMLElement>(".rack");
+      if (!rack) return null;
+      const tiles = [...rack.querySelectorAll<HTMLElement>("[data-rack-idx]")];
+      let i = tiles.findIndex((t) => {
+        const r = t.getBoundingClientRect();
+        return x < r.left + r.width / 2;
+      });
+      if (i < 0) i = tiles.length;
+      return { rackIdx: i };
+    };
+    const center = (d: Drag) => [d.x - d.grabX + 26, d.y - d.grabY - d.lift + 26] as const;
+
+    const move = (e: PointerEvent) => {
+      const p = pressRef.current;
+      if (!p) return;
+      let d = dragRef.current;
+      if (!d) {
+        if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+        const placedTile = p.fromCell != null ? placedRef.current.get(p.fromCell) : null;
+        const t = rackRef.current.get(p.tileId);
+        if (!t) return;
+        d = {
+          tileId: p.tileId,
+          letter: placedTile ? placedTile.letter : t.letter,
+          blank: t.letter === "?",
+          fromCell: p.fromCell,
+          x: e.clientX,
+          y: e.clientY,
+          grabX: Math.min(52, Math.max(0, ((p.x - p.rect.left) / p.rect.width) * 52)),
+          grabY: Math.min(52, Math.max(0, ((p.y - p.rect.top) / p.rect.height) * 52)),
+          lift: p.touch ? 36 : 0,
+          over: null,
+        };
+      }
+      d = { ...d, x: e.clientX, y: e.clientY };
+      const [cx, cy] = center(d);
+      d.over = hit(cx, cy);
+      dragRef.current = d;
+      setDrag(d);
+    };
+    const up = () => {
+      const d = dragRef.current;
+      pressRef.current = null;
+      if (!d) return;
+      dragRef.current = null;
+      suppressClickRef.current = true;
+      setTimeout(() => (suppressClickRef.current = false), 0);
+      setDrag(null);
+      dropRef.current(d, d.over);
+    };
+    const cancel = () => {
+      pressRef.current = null;
+      dragRef.current = null;
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+    };
+  }, []);
+
+  const placedRef = useRef(placed);
+  placedRef.current = placed;
+  const rackRef = useRef(rackById);
+  rackRef.current = rackById;
+
+  useEffect(() => {
+    if (snapCell == null) return;
+    const t = setTimeout(() => setSnapCell(null), 350);
+    return () => clearTimeout(t);
+  }, [snapCell]);
+
+  function startPress(e: React.PointerEvent<HTMLElement>, tileId: string, fromCell: number | null) {
+    if (exchangeMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+    pressRef.current = {
+      tileId,
+      fromCell,
+      x: e.clientX,
+      y: e.clientY,
+      rect: e.currentTarget.getBoundingClientRect(),
+      touch: e.pointerType === "touch",
+    };
   }
 
   function onSquareClick(cell: number) {
+    if (suppressClickRef.current) return;
     // Clicking a tentatively placed tile sends it back to the rack.
     if (placed.has(cell)) {
       setPlaced((prev) => {
@@ -406,22 +563,32 @@ function Table({
         : view.settings.failedChallenge === "bonus-5"
           ? `If every word is valid, ${pendingAuthor?.name} gets 5 extra points.`
           : "";
-    if (confirm(`Challenge ${pendingAuthor?.name}'s play: ${p.words.map((w) => w.word).join(", ")}?\n\n${penalty}`)) {
-      act({ type: "challenge" });
-    }
+    setConfirmBox({
+      title: `Challenge ${p.words.map((w) => w.word).join(", ")}?`,
+      body: `If any word isn't in the dictionary, ${pendingAuthor?.name} takes the tiles back and scores 0. ${penalty}`,
+      ok: "Challenge",
+      danger: true,
+      onOk: () => act({ type: "challenge" }),
+    });
   }
 
+  const visibleRack = rackTiles.filter((t) => t.id !== drag?.tileId);
+  const overRack = !!drag?.over && "rackIdx" in drag.over;
   const winnerScore = Math.max(...view.players.map((p) => p.score));
 
   return (
     <main className="table">
       <header className="topbar">
-        <Link href="/" className="back">← Home</Link>
-        <span>Game {view.id}</span>
-        <span className="muted">{view.bagCount} tiles in bag</span>
-        <button className="link-btn" onClick={toggleCelebrate} title="Dancing critters for bingos and wins">
-          {celebrate ? "🦄 Celebrations on" : "Celebrations off"}
+        <Link href="/" className="brand">
+          <span className="brand-mark">S</span>
+          <span className="brand-name">Scrabbleish</span>
+        </Link>
+        <span className="pill">Game {view.id}</span>
+        <span className="sp" />
+        <button className="pill pill-btn" onClick={toggleCelebrate} title="Dancing critters for bingos and wins">
+          {celebrate ? "🦄 On" : "🦄 Off"}
         </button>
+        <ThemeToggle />
       </header>
 
       <div className="layout">
@@ -438,104 +605,131 @@ function Table({
             onAccept={() => act({ type: "accept" })}
           />
 
-          <div className="board">
-            {PREMIUMS.flatMap((row, r) =>
-              row.map((prem, c) => {
-                const cell = idx(r, c);
-                const t = view.board[cell];
-                const p = placed.get(cell);
-                const cls = ["sq", prem ? prem.toLowerCase() : "", r === 7 && c === 7 ? "star" : ""];
-                return (
-                  <div
-                    key={cell}
-                    className={cls.join(" ")}
-                    onClick={() => onSquareClick(cell)}
-                    onDragOver={(e) => {
-                      if (!t && myTurn) e.preventDefault();
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      placeTile(cell, e.dataTransfer.getData("text/plain"));
-                    }}
-                  >
-                    {t ? (
-                      <div className={`tile ${t.blank ? "blank" : ""} ${pendingCells.has(cell) ? "pending" : lastCells.has(cell) ? "last" : ""}`}>
-                        <TileFace letter={t.letter} blank={t.blank} />
-                      </div>
-                    ) : p ? (
-                      <div
-                        className={`tile tentative ${p.blank ? "blank" : ""}`}
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData("text/plain", p.tileId)}
-                      >
-                        <TileFace letter={p.letter} blank={p.blank} />
-                      </div>
-                    ) : (
-                      <span className="sq-label">{r === 7 && c === 7 ? "★" : prem ? PREMIUM_LABEL[prem] : ""}</span>
-                    )}
-                  </div>
-                );
-              })
-            )}
+          <div className="boardwrap">
+            <div className="board">
+              {PREMIUMS.flatMap((row, r) =>
+                row.map((prem, c) => {
+                  const cell = idx(r, c);
+                  const t = view.board[cell];
+                  const p = placed.get(cell);
+                  const over = drag?.over && "cell" in drag.over && drag.over.cell === cell;
+                  const draggingThis = drag?.fromCell === cell;
+                  const star = r === 7 && c === 7;
+                  const cls = [
+                    "sq",
+                    prem ? prem.toLowerCase() : "",
+                    star ? "star" : "",
+                    over ? (t || (p && !draggingThis) ? "drop-bad" : "drop-ok") : "",
+                    selected && !t && !p ? "targetable" : "",
+                  ];
+                  return (
+                    <div key={cell} data-cell={cell} className={cls.join(" ")} onClick={() => onSquareClick(cell)}>
+                      {t ? (
+                        <div className={`tile ${t.blank ? "blank" : ""} ${pendingCells.has(cell) ? "pending" : lastCells.has(cell) ? "last" : ""}`}>
+                          <TileFace letter={t.letter} blank={t.blank} />
+                        </div>
+                      ) : p && !draggingThis ? (
+                        <div
+                          className={`tile tentative ${p.blank ? "blank" : ""} ${snapCell === cell ? "snap" : ""}`}
+                          onPointerDown={(e) => startPress(e, p.tileId, cell)}
+                        >
+                          <TileFace letter={p.letter} blank={p.blank} />
+                        </div>
+                      ) : star ? (
+                        <span className="sq-label"><span className="ab">★</span></span>
+                      ) : prem ? (
+                        <span className="sq-label">
+                          <span className="ab">{prem}</span>
+                          <span className="full">{PREMIUM_LABEL[prem]}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {me && view.status === "playing" && (
             <>
-              <div
-                className="rack"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const id = e.dataTransfer.getData("text/plain");
-                  setPlaced((prev) => new Map([...prev].filter(([, p]) => p.tileId !== id)));
-                }}
-              >
-                {rackTiles.map((t) => (
-                  <div
-                    key={t.id}
-                    className={`tile rack-tile ${t.letter === "?" ? "blank" : ""} ${selected === t.id ? "selected" : ""} ${exchangeSel.has(t.id) ? "exchange" : ""}`}
-                    draggable={myTurn && !exchangeMode}
-                    onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-                    onClick={() => {
-                      if (exchangeMode) {
-                        setExchangeSel((s) => {
-                          const n = new Set(s);
-                          if (n.has(t.id)) n.delete(t.id);
-                          else n.add(t.id);
-                          return n;
-                        });
-                      } else setSelected(selected === t.id ? null : t.id);
-                    }}
-                  >
-                    <TileFace letter={t.letter} />
-                  </div>
-                ))}
-                {Array.from({ length: Math.max(0, RACK_SIZE - rackTiles.length - placed.size) }).map((_, i) => (
-                  <div key={`e${i}`} className="rack-slot" />
-                ))}
+              <div className="rackrow">
+                <button className="icon-btn" onClick={shuffleRack} title="Shuffle rack" aria-label="Shuffle rack">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>
+                </button>
+                <div className={`rack ${overRack ? "rack-over" : ""}`}>
+                  {visibleRack.flatMap((t, i, arr) => {
+                    const gapAt = overRack && drag?.over && "rackIdx" in drag.over ? drag.over.rackIdx : -1;
+                    const els = gapAt === i ? [<div key="gap" className="rack-gap" />] : [];
+                    els.push(
+                      <div
+                        key={t.id}
+                        data-rack-idx={i}
+                        className={`tile rack-tile ${t.letter === "?" ? "blank" : ""} ${selected === t.id ? "selected" : ""} ${exchangeSel.has(t.id) ? "exchange" : ""}`}
+                        onPointerDown={(e) => startPress(e, t.id, null)}
+                        onClick={() => {
+                          if (suppressClickRef.current) return;
+                          if (exchangeMode) {
+                            setExchangeSel((s) => {
+                              const n = new Set(s);
+                              if (n.has(t.id)) n.delete(t.id);
+                              else n.add(t.id);
+                              return n;
+                            });
+                          } else setSelected(selected === t.id ? null : t.id);
+                        }}
+                      >
+                        <TileFace letter={t.letter} />
+                      </div>
+                    );
+                    if (i === arr.length - 1 && gapAt > i) els.push(<div key="gap" className="rack-gap" />);
+                    return els;
+                  })}
+                  {overRack && visibleRack.length === 0 && <div key="gap" className="rack-gap" />}
+                  {Array.from({ length: Math.max(0, RACK_SIZE - visibleRack.length - (overRack ? 1 : 0)) }).map((_, i) => (
+                    <div key={`e${i}`} className="rack-slot" />
+                  ))}
+                </div>
+                <button className="icon-btn" onClick={recall} disabled={placed.size === 0} title="Recall tiles" aria-label="Recall tiles">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+                </button>
+              </div>
+
+              <div className={`preview ${preview ? (preview.ok ? "ok" : "bad") : ""}`}>
+                {preview?.ok ? (
+                  <>
+                    {preview.words.map((w, i) => (
+                      <span key={i} className="word-chip">
+                        {w.word} <b>{w.score}</b>
+                      </span>
+                    ))}
+                    {preview.bingo && <span className="word-chip bingo">Bingo <b>50</b></span>}
+                  </>
+                ) : preview ? (
+                  preview.error
+                ) : exchangeMode ? (
+                  "Tap the tiles you want to swap"
+                ) : myTurn ? (
+                  "Drag tiles onto the board, or tap a tile then a square"
+                ) : (
+                  "You can arrange tiles while you wait"
+                )}
               </div>
 
               <div className="controls">
                 {exchangeMode ? (
                   <>
-                    <span className="muted">Tap tiles to swap.</span>
-                    <button className="primary" disabled={busy || exchangeSel.size === 0} onClick={submitExchange}>
+                    <button className="btn primary" disabled={busy || exchangeSel.size === 0} onClick={submitExchange}>
                       Exchange {exchangeSel.size || ""}
                     </button>
-                    <button onClick={() => (setExchangeMode(false), setExchangeSel(new Set()))}>Cancel</button>
+                    <button className="btn" onClick={() => (setExchangeMode(false), setExchangeSel(new Set()))}>Cancel</button>
                   </>
                 ) : (
                   <>
-                    <button
-                      className="primary"
-                      disabled={!myTurn || busy || !preview?.ok || mustAccept}
-                      onClick={submitPlay}
-                    >
-                      {preview?.ok ? `Play ${preview.score}` : "Play"}
+                    <button className="btn primary" disabled={!myTurn || busy || !preview?.ok || mustAccept} onClick={submitPlay}>
+                      {preview?.ok ? `Play for ${preview.score}` : "Play"}
                     </button>
-                    <button onClick={recall} disabled={placed.size === 0}>Recall</button>
-                    <button onClick={shuffleRack}>Shuffle</button>
                     <button
+                      className="btn"
                       disabled={!myTurn || busy || view.bagCount < RACK_SIZE || mustAccept}
                       title={view.bagCount < RACK_SIZE ? "Exchanges need at least 7 tiles in the bag" : ""}
                       onClick={() => (recall(), setExchangeMode(true))}
@@ -543,67 +737,93 @@ function Table({
                       Exchange
                     </button>
                     <button
+                      className="btn"
                       disabled={!myTurn || busy || mustAccept}
-                      onClick={() => confirm("Pass your turn?") && act({ type: "pass" })}
+                      onClick={() => setConfirmBox({ title: "Pass your turn?", ok: "Pass", onOk: () => act({ type: "pass" }) })}
                     >
                       Pass
                     </button>
+                    <button className="btn mobile-only" onClick={shuffleRack} aria-label="Shuffle rack">Shuffle</button>
+                    <button className="btn mobile-only" onClick={recall} disabled={placed.size === 0} aria-label="Recall tiles">Recall</button>
                   </>
                 )}
               </div>
-              {preview && !preview.ok && <p className="hint">{preview.error}</p>}
-              {preview?.ok && (
-                <p className="hint">
-                  {preview.words.map((w) => `${w.word} ${w.score}`).join(" + ")}
-                  {preview.bingo ? " + 50 bingo" : ""}
-                </p>
-              )}
-              {!myTurn && placed.size === 0 && <p className="hint">Tip: you can arrange tiles while you wait.</p>}
             </>
           )}
-          {error && <p className="error">{error}</p>}
+          {error && <p className="error center">{error}</p>}
         </div>
 
         <aside className="side">
-          <section className="card scores">
-            {view.players.map((p, i) => (
-              <div
-                key={p.id}
-                className={`score-row ${i === view.turn && view.status === "playing" ? "turn" : ""} ${view.status === "finished" && p.score === winnerScore ? "winner" : ""}`}
-              >
-                <span className="name">
-                  {view.status === "finished" && p.score === winnerScore ? "🏆 " : ""}
-                  {p.name}
-                  {p.id === me?.id && <span className="badge you">you</span>}
-                  {p.skipNext && <span className="badge warn">loses next turn</span>}
-                </span>
-                <span className="muted small">{p.rackCount} tiles</span>
-                <span className="pts">{p.score}</span>
-              </div>
-            ))}
+          <section className="card">
+            <h4>Players</h4>
+            {view.players.map((p, i) => {
+              const won = view.status === "finished" && p.score === winnerScore;
+              const turn = i === view.turn && view.status === "playing";
+              return (
+                <div key={p.id} className={`pl ${turn ? "on" : ""} ${won ? "won" : ""}`}>
+                  <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                    {won ? "🏆" : p.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="n">
+                    {p.name}
+                    {p.id === me?.id && <span className="badge you">you</span>}
+                    <small>
+                      {turn ? "Playing · " : ""}
+                      {p.rackCount} tiles
+                      {p.skipNext && <span className="warn-text"> · loses next turn</span>}
+                    </small>
+                  </span>
+                  <span className="s">{p.score}</span>
+                </div>
+              );
+            })}
           </section>
 
-          <section className="card log" ref={logRef}>
-            {view.log
-              .filter((l) => l.kind !== "join")
-              .map((l, i) => (
-                <p key={i} className={`log-${l.kind}`}>{l.text}</p>
-              ))}
+          <section className="card bag">
+            <span>Bag</span>
+            <div className="bar">
+              <span style={{ width: `${Math.min(100, (view.bagCount / (view.settings.bag === "double" ? 200 : 100)) * 100)}%` }} />
+            </div>
+            <span className="bag-n">{view.bagCount}</span>
           </section>
 
-          {view.status !== "lobby" && Object.keys(view.unseen).length > 0 && (
+          <section className="card">
+            <h4>Moves</h4>
+            <div className="log" ref={logRef}>
+              {view.log
+                .filter((l) => l.kind !== "join")
+                .map((l, i) => (
+                  <p key={i} className={`log-${l.kind}`}>{l.text}</p>
+                ))}
+            </div>
+          </section>
+
+          {Object.keys(view.unseen).length > 0 && (
             <details className="card unseen">
               <summary>Unseen tiles ({Object.values(view.unseen).reduce((a, b) => a + b, 0)})</summary>
-              <p className="mono">
+              <div className="unseen-grid">
                 {Object.entries(view.unseen)
                   .sort(([a], [b]) => (a === "?" ? 1 : b === "?" ? -1 : a.localeCompare(b)))
-                  .map(([l, n]) => `${l === "?" ? "blank" : l}×${n}`)
-                  .join("  ")}
-              </p>
+                  .map(([l, n]) => (
+                    <span key={l}>
+                      <b>{l === "?" ? "␣" : l}</b>
+                      {n}
+                    </span>
+                  ))}
+              </div>
             </details>
           )}
         </aside>
       </div>
+
+      {drag && (
+        <div
+          className={`tile floating ${drag.blank ? "blank" : ""} ${drag.over ? "" : "nowhere"}`}
+          style={{ left: drag.x - drag.grabX, top: drag.y - drag.grabY - drag.lift }}
+        >
+          <TileFace letter={drag.letter} blank={drag.blank && drag.letter !== "?"} />
+        </div>
+      )}
 
       {blankAt && (
         <div className="modal-bg" onClick={() => setBlankAt(null)}>
@@ -622,6 +842,27 @@ function Table({
                   {l}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBox && (
+        <div className="modal-bg" onClick={() => setConfirmBox(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{confirmBox.title}</h3>
+            {confirmBox.body && <p className="muted">{confirmBox.body}</p>}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setConfirmBox(null)}>Cancel</button>
+              <button
+                className={`btn ${confirmBox.danger ? "danger" : "primary"}`}
+                onClick={() => {
+                  confirmBox.onOk();
+                  setConfirmBox(null);
+                }}
+              >
+                {confirmBox.ok}
+              </button>
             </div>
           </div>
         </div>
@@ -648,12 +889,19 @@ function StatusBanner(props: {
   onAccept: () => void;
 }) {
   const { view, myTurn, pendingAuthorName, isAuthor, canChallenge, mustAccept, busy } = props;
-  if (view.status === "finished") return <div className="banner done">{view.endReason ?? "Game over"}</div>;
+  if (view.status === "finished")
+    return (
+      <div className="banner done">
+        <span className="dot" />
+        <div className="banner-text"><strong>{view.endReason ?? "Game over"}</strong></div>
+      </div>
+    );
   const current = view.players[view.turn];
   const pend = view.pending;
   return (
     <div className={`banner ${myTurn ? "mine" : ""}`}>
-      <div>
+      <span className="dot" />
+      <div className="banner-text">
         <strong>{myTurn ? "Your turn" : `${current?.name}'s turn`}</strong>
         {view.settings.wordCheck === "challenge" && pend && (
           <div className="pending-line">
@@ -671,12 +919,12 @@ function StatusBanner(props: {
       </div>
       <div className="banner-actions">
         {canChallenge && (
-          <button className="danger" disabled={busy} onClick={props.onChallenge}>
+          <button className="btn danger" disabled={busy} onClick={props.onChallenge}>
             Challenge
           </button>
         )}
         {mustAccept && (
-          <button className="primary" disabled={busy} onClick={props.onAccept}>
+          <button className="btn primary" disabled={busy} onClick={props.onAccept}>
             Accept
           </button>
         )}

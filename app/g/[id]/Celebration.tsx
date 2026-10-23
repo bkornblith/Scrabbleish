@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Dancing critters for bingos (one at random) and wins (the whole cast in a conga line).
 
@@ -106,6 +106,75 @@ const CAST = [
 
 const CONFETTI_COLORS = ["#d9473b", "#2f7fb8", "#f3c742", "#1f6f4a", "#ff98b4", "#b77dd8"];
 
+/** Every board square flips into a little pig that pops out and dances, rippling out from the centre. */
+function PigParty({ duration }: { duration: number }) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  // Track the board's position (it can shift while fonts load or the page scrolls).
+  useEffect(() => {
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      const el = document.querySelector(".board");
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const key = `${r.left},${r.top},${r.width},${r.height}`;
+        if (key !== last) {
+          last = key;
+          setRect(r);
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const cells = useMemo(
+    () =>
+      Array.from({ length: 225 }, (_, i) => {
+        const r = Math.floor(i / 15);
+        const c = i % 15;
+        const dist = Math.hypot(r - 7, c - 7);
+        return { i, delay: dist * 0.07, flip: (r + c) % 2 === 0 ? 1 : -1, tempo: 0.32 + ((r * 7 + c * 3) % 5) * 0.03 };
+      }),
+    []
+  );
+  if (!rect) return null;
+  return (
+    <div className="pig-party" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
+      <svg width="0" height="0" style={{ position: "absolute" }}>
+        <defs>
+          <symbol id="pigface" viewBox="0 0 40 40">
+            <path d="M8 12 L6 3 L15 8Z M32 12 L34 3 L25 8Z" fill="#ff8fb0" stroke="#e0628a" strokeWidth="1.5" strokeLinejoin="round" />
+            <circle cx="20" cy="22" r="15" fill="#ffb3c7" stroke="#e0628a" strokeWidth="1.5" />
+            <ellipse cx="20" cy="26" rx="7" ry="5" fill="#ff8fb0" stroke="#e0628a" strokeWidth="1.3" />
+            <circle cx="17.5" cy="26" r="1.4" fill="#a24767" />
+            <circle cx="22.5" cy="26" r="1.4" fill="#a24767" />
+            <circle cx="14" cy="18" r="2" fill="#2b2620" />
+            <circle cx="26" cy="18" r="2" fill="#2b2620" />
+            <circle cx="14.6" cy="17.4" r="0.6" fill="#fff" />
+            <circle cx="26.6" cy="17.4" r="0.6" fill="#fff" />
+            <circle cx="10.5" cy="24" r="2.2" fill="#ff7fa3" opacity="0.5" />
+            <circle cx="29.5" cy="24" r="2.2" fill="#ff7fa3" opacity="0.5" />
+          </symbol>
+        </defs>
+      </svg>
+      {cells.map((c) => (
+        <div
+          key={c.i}
+          className="pig-cell"
+          style={{ animationDelay: `${c.delay}s`, animationDuration: `${duration}s`, ["--flip" as string]: c.flip }}
+        >
+          <div className="pig-dance" style={{ animationDuration: `${c.tempo}s`, animationDelay: `${c.delay}s` }}>
+            <svg viewBox="0 0 40 40">
+              <use href="#pigface" />
+            </svg>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export type CelebrationEvent = { kind: "bingo" | "win"; title: string; key: number };
 
 export function Celebration({ event, onDone }: { event: CelebrationEvent; onDone: () => void }) {
@@ -123,12 +192,13 @@ export function Celebration({ event, onDone }: { event: CelebrationEvent; onDone
   );
 
   useEffect(() => {
-    const t = setTimeout(onDone, event.kind === "win" ? 9000 : 5200);
+    const t = setTimeout(onDone, event.kind === "win" ? 10000 : 6500);
     return () => clearTimeout(t);
   }, [event, onDone]);
 
   return (
     <div className={`celebration ${event.kind}`} onClick={onDone} aria-live="polite">
+      <PigParty duration={event.kind === "win" ? 8.5 : 5} />
       <div className="celebration-title">{event.title}</div>
       {event.kind === "bingo" ? (
         <div className="dancer" title={dancer.name}>

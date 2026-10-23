@@ -187,17 +187,23 @@ export function startGame(game: Game, playerId: string, rand: RandomInt = defaul
   game.bag = makeBag(game.settings.bag, rand);
   const rankOf = (l: string) => (l === "?" ? 0 : l.charCodeAt(0) - 64);
 
+  const tileName = (l: string) => (l === "?" ? "a blank" : `“${l}”`);
   let contenders = [...game.players];
+  let round = 0;
+  let winningTile = "";
   while (contenders.length > 1) {
     shuffle(game.bag, rand);
     const draws = contenders.map((p, i) => ({ p, tile: game.bag[i] }));
     log(
       game,
       "draw",
-      "Draw for first turn: " + draws.map((d) => `${d.p.name} ${d.tile.letter === "?" ? "blank" : d.tile.letter}`).join(", ")
+      (round++ ? "Tie, drawing again: " : "Each player drew a tile to decide who goes first: ") +
+        draws.map((d) => `${d.p.name} drew ${tileName(d.tile.letter)}`).join(", ") +
+        "."
     );
     const best = Math.min(...draws.map((d) => rankOf(d.tile.letter)));
     contenders = draws.filter((d) => rankOf(d.tile.letter) === best).map((d) => d.p);
+    winningTile = draws.find((d) => d.p === contenders[0])!.tile.letter;
   }
   shuffle(game.bag, rand);
 
@@ -207,7 +213,13 @@ export function startGame(game: Game, playerId: string, rand: RandomInt = defaul
   for (const p of game.players) drawTiles(game, p, RACK_SIZE);
   game.turn = 0;
   game.status = "playing";
-  log(game, "start", `${game.players[0].name} goes first`);
+  log(
+    game,
+    "start",
+    `${game.players[0].name} goes first` +
+      (winningTile ? (winningTile === "?" ? " (a blank beats every letter)." : " (closest to A).") : ".") +
+      " The tiles went back in the bag."
+  );
 }
 
 // ---------- move analysis (no dictionary) ----------

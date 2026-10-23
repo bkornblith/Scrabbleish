@@ -17,8 +17,8 @@ export function SettingsForm({
       <label>
         Word checking
         <select disabled={disabled} value={settings.wordCheck} onChange={(e) => set("wordCheck", e.target.value as Settings["wordCheck"])}>
-          <option value="challenge">Challenge (official): anything goes until someone challenges</option>
-          <option value="auto">Automatic: invalid words are rejected</option>
+          <option value="challenge">Challenge (official)</option>
+          <option value="auto">Automatic: reject invalid words</option>
         </select>
       </label>
       {settings.wordCheck === "challenge" && (
@@ -29,8 +29,8 @@ export function SettingsForm({
             value={settings.failedChallenge}
             onChange={(e) => set("failedChallenge", e.target.value as Settings["failedChallenge"])}
           >
-            <option value="lose-turn">Challenger loses their next turn (official)</option>
-            <option value="bonus-5">Player challenged gets +5 (tournament)</option>
+            <option value="lose-turn">Challenger loses a turn (official)</option>
+            <option value="bonus-5">Challenged player gets +5</option>
             <option value="none">No penalty</option>
           </select>
         </label>
@@ -38,8 +38,8 @@ export function SettingsForm({
       <label>
         Tile bag
         <select disabled={disabled} value={settings.bag} onChange={(e) => set("bag", e.target.value as Settings["bag"])}>
-          <option value="standard">Standard: 100 tiles</option>
-          <option value="double">Double: 200 tiles (longer games, good for 5 players)</option>
+          <option value="standard">Standard (100 tiles)</option>
+          <option value="double">Double (200 tiles, for 5 players)</option>
         </select>
       </label>
     </div>

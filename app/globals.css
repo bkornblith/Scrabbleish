@@ -118,7 +118,15 @@ input, select {
   outline: none; transition: border-color 0.15s, box-shadow 0.15s;
 }
 input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+select {
+  appearance: none; -webkit-appearance: none; min-height: 44px; padding-right: 38px; cursor: pointer;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238b8fa3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
 select option { color: #15171c; }
+/* 16px stops iOS Safari from zooming into fields on focus. */
+@media (max-width: 520px) { input, select { font-size: 16px; min-height: 48px; } }
 label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 500; color: var(--muted); }
 
 .btn, .home button, .modal button {
@@ -160,7 +168,13 @@ img.brand-mark { background: none; border-radius: 0; filter: drop-shadow(0 2px 4
 .logo-tile:nth-child(8) { animation-delay: 0.35s; } .logo-tile:nth-child(9) { animation-delay: 0.4s; }
 .logo-tile:nth-child(10) { animation-delay: 0.45s; } .logo-tile:nth-child(11) { animation-delay: 0.5s; }
 @keyframes drop-in { from { transform: translateY(-24px) rotate(-10deg); opacity: 0; } }
-.tagline { text-align: center; color: var(--muted); margin: 14px 0 26px; }
+.home .logo { margin-bottom: 24px; }
+/* Desktop: New game and Join side by side so the whole page fits a laptop screen. */
+@media (min-width: 900px) {
+  .home:has(.home-grid) { max-width: 920px; }
+  .home-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+  .home-grid .card { margin-bottom: 0; }
+}
 .home .card { margin-bottom: 16px; padding: 20px; }
 .home .card > button, .home form > button { width: 100%; margin-top: 4px; padding: 12px; }
 .share { display: flex; gap: 8px; margin-bottom: 8px; }

@@ -45,8 +45,8 @@ export default function Home() {
           </span>
         ))}
       </h1>
-      <p className="tagline">Official rules · 2–5 players · Challenge phony words</p>
 
+      <div className="home-grid">
       <section className="card">
         <h2>New game</h2>
         <label>
@@ -75,6 +75,7 @@ export default function Home() {
           <button type="submit" disabled={!code.trim()}>Go to game</button>
         </form>
       </section>
+      </div>
     </main>
   );
 }

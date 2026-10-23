@@ -36,6 +36,17 @@ export function SettingsForm({
         </label>
       )}
       <label>
+        Exchanging tiles
+        <select
+          disabled={disabled}
+          value={settings.exchangeRule ?? "enough"}
+          onChange={(e) => set("exchangeRule", e.target.value as Settings["exchangeRule"])}
+        >
+          <option value="enough">Any number, as long as the bag can replace them</option>
+          <option value="seven">Only when 7+ tiles are in the bag (official)</option>
+        </select>
+      </label>
+      <label>
         Tile bag
         <select disabled={disabled} value={settings.bag} onChange={(e) => set("bag", e.target.value as Settings["bag"])}>
           <option value="standard">Standard: 100 tiles</option>

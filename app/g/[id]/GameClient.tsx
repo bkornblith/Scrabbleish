@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BOARD_SIZE, LETTER_VALUES, PREMIUMS, RACK_SIZE, type Premium } from "@/lib/constants";
-import { analyzePlay, idx, type BoardTile, type GameView, type Settings, type Tile } from "@/lib/engine";
+import { analyzePlay, exchangeLimit, idx, type BoardTile, type GameView, type Settings, type Tile } from "@/lib/engine";
 import { SettingsForm } from "../../SettingsForm";
 import { Celebration, type CelebrationEvent } from "./Celebration";
 import { ThemeToggle } from "../../ThemeToggle";
@@ -572,6 +572,7 @@ function Table({
     });
   }
 
+  const swapLimit = exchangeLimit(view);
   const visibleRack = rackTiles.filter((t) => t.id !== drag?.tileId);
   const overRack = !!drag?.over && "rackIdx" in drag.over;
   const winnerScore = Math.max(...view.players.map((p) => p.score));
@@ -664,18 +665,11 @@ function Table({
                       <div
                         key={t.id}
                         data-rack-idx={i}
-                        className={`tile rack-tile ${t.letter === "?" ? "blank" : ""} ${selected === t.id ? "selected" : ""} ${exchangeSel.has(t.id) ? "exchange" : ""}`}
+                        className={`tile rack-tile ${t.letter === "?" ? "blank" : ""} ${selected === t.id ? "selected" : ""}`}
                         onPointerDown={(e) => startPress(e, t.id, null)}
                         onClick={() => {
                           if (suppressClickRef.current) return;
-                          if (exchangeMode) {
-                            setExchangeSel((s) => {
-                              const n = new Set(s);
-                              if (n.has(t.id)) n.delete(t.id);
-                              else n.add(t.id);
-                              return n;
-                            });
-                          } else setSelected(selected === t.id ? null : t.id);
+                          setSelected(selected === t.id ? null : t.id);
                         }}
                       >
                         <TileFace letter={t.letter} />
@@ -706,8 +700,6 @@ function Table({
                   </>
                 ) : preview ? (
                   preview.error
-                ) : exchangeMode ? (
-                  "Tap the tiles you want to swap"
                 ) : myTurn ? (
                   "Drag tiles onto the board, or tap a tile then a square"
                 ) : (
@@ -716,23 +708,18 @@ function Table({
               </div>
 
               <div className="controls">
-                {exchangeMode ? (
-                  <>
-                    <button className="btn primary" disabled={busy || exchangeSel.size === 0} onClick={submitExchange}>
-                      Exchange {exchangeSel.size || ""}
-                    </button>
-                    <button className="btn" onClick={() => (setExchangeMode(false), setExchangeSel(new Set()))}>Cancel</button>
-                  </>
-                ) : (
-                  <>
                     <button className="btn primary" disabled={!myTurn || busy || !preview?.ok || mustAccept} onClick={submitPlay}>
                       {preview?.ok ? `Play for ${preview.score}` : "Play"}
                     </button>
                     <button
                       className="btn"
-                      disabled={!myTurn || busy || view.bagCount < RACK_SIZE || mustAccept}
-                      title={view.bagCount < RACK_SIZE ? "Exchanges need at least 7 tiles in the bag" : ""}
-                      onClick={() => (recall(), setExchangeMode(true))}
+                      disabled={!myTurn || busy || mustAccept || swapLimit === 0}
+                      title={swapLimit === 0 ? "Not enough tiles left in the bag to exchange" : "Swap any of your tiles for new ones"}
+                      onClick={() => {
+                        recall();
+                        setExchangeSel(new Set());
+                        setExchangeMode(true);
+                      }}
                     >
                       Exchange
                     </button>
@@ -745,8 +732,6 @@ function Table({
                     </button>
                     <button className="btn mobile-only" onClick={shuffleRack} aria-label="Shuffle rack">Shuffle</button>
                     <button className="btn mobile-only" onClick={recall} disabled={placed.size === 0} aria-label="Recall tiles">Recall</button>
-                  </>
-                )}
               </div>
             </>
           )}
@@ -842,6 +827,58 @@ function Table({
                   {l}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {exchangeMode && (
+        <div className="modal-bg" onClick={() => setExchangeMode(false)}>
+          <div className="modal exchange-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Exchange tiles</h3>
+            <p className="muted">
+              Tap the tiles to put back in the bag. You'll draw the same number of new tiles, and this uses your turn.
+            </p>
+            <div className="exchange-rack">
+              {order
+                .map((id) => rackById.get(id))
+                .filter((t): t is Tile => !!t)
+                .map((t) => (
+                  <button
+                    key={t.id}
+                    className={`tile ex-tile ${t.letter === "?" ? "blank" : ""} ${exchangeSel.has(t.id) ? "picked" : ""}`}
+                    onClick={() =>
+                      setExchangeSel((sel) => {
+                        const n = new Set(sel);
+                        if (n.has(t.id)) n.delete(t.id);
+                        else n.add(t.id);
+                        return n;
+                      })
+                    }
+                  >
+                    <TileFace letter={t.letter} />
+                  </button>
+                ))}
+            </div>
+            <div className="exchange-meta">
+              <button className="link-btn" onClick={() => setExchangeSel(new Set(order.filter((id) => rackById.has(id)).slice(0, swapLimit)))}>
+                Select all
+              </button>
+              <button className="link-btn" onClick={() => setExchangeSel(new Set())}>Clear</button>
+              <span className="sp" />
+              <span className={exchangeSel.size > swapLimit ? "error" : "muted"}>
+                {view.bagCount} in bag{swapLimit < RACK_SIZE ? ` · max ${swapLimit}` : ""}
+              </span>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setExchangeMode(false)}>Cancel</button>
+              <button
+                className="btn primary"
+                disabled={busy || exchangeSel.size === 0 || exchangeSel.size > swapLimit}
+                onClick={submitExchange}
+              >
+                {exchangeSel.size ? `Swap ${exchangeSel.size} tile${exchangeSel.size > 1 ? "s" : ""}` : "Swap"}
+              </button>
             </div>
           </div>
         </div>

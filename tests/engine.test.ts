@@ -172,8 +172,23 @@ test("bingo adds 50, blanks score 0", () => {
   assert.ok(g.pending!.bingo);
 });
 
-test("exchange needs 7 in bag; going out ends the game with rack adjustments", () => {
+test("exchange: any subset the bag can replace; official 7-tile rule as an option", () => {
   const g = setup();
+  g.bag.splice(0, g.bag.length - 3);
+  const rack = g.players[0].rack;
+  assert.throws(() => E.exchange(g, "p0", rack.slice(0, 4).map((t) => t.id), rand), /Only 3 tiles/);
+  E.exchange(g, "p0", rack.slice(0, 3).map((t) => t.id), rand);
+  assert.equal(g.players[0].rack.length, 7);
+  assert.equal(g.bag.length, 3);
+  assert.equal(g.turn, 1);
+
+  const h = setup(2, { exchangeRule: "seven" });
+  h.bag.splice(0, h.bag.length - 6);
+  assert.throws(() => E.exchange(h, "p0", [h.players[0].rack[0].id], rand), /at least 7/);
+});
+
+test("going out ends the game with rack adjustments", () => {
+  const g = setup(2, { exchangeRule: "seven" });
   rig(g, 0, "CATEEIO");
   rig(g, 1, "EEEEEEE");
   g.bag.splice(0, g.bag.length - 3);

@@ -1,71 +1,68 @@
-import { Redis } from "@upstash/redis";
 import type { Game } from "./engine";
+import { memoryBackend } from "./backends/memory";
+import { redisBackend } from "./backends/redis";
+import { broadcastChange, supabaseBackend } from "./backends/supabase";
+import type { Backend } from "./backends/types";
 
-// Games live in Redis (Upstash, via the Vercel Marketplace) so every serverless instance sees
-// the same state. Without Redis credentials we fall back to process memory for local dev.
+// Where games live, in order of preference:
+//  1. Supabase Postgres + Realtime (instant updates, free tier) when its URL and secret key are set
+//  2. Upstash Redis (polling) when its REST credentials are set
+//  3. Process memory, for local development
+// Every serverless instance must share state, so production needs 1 or 2.
 
-const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-const redis = url && token ? new Redis({ url, token, automaticDeserialization: false }) : null;
-
-if (!redis && process.env.VERCEL) {
-  console.error("No Redis configured: add the Upstash Redis integration to this Vercel project.");
-}
-
-// A game is deleted automatically after 7 days without any move (every save resets the clock).
-const TTL_SECONDS = 60 * 60 * 24 * 7;
-const key = (id: string) => `scrabble:game:${id}`;
-
-type MemEntry = { v: number; data: string; savedAt: number };
-const mem: Map<string, MemEntry> = ((globalThis as unknown as { __scrabbleMem?: Map<string, MemEntry> }).__scrabbleMem ??= new Map());
-
-/** Same 7-day expiry for the in-memory fallback. */
-function pruneMem() {
-  const cutoff = Date.now() - TTL_SECONDS * 1000;
-  for (const [id, e] of mem) if (e.savedAt < cutoff) mem.delete(id);
-}
-
-// Compare-and-set: only write if the stored version is still the one we read.
-const CAS = `
-local cur = redis.call('HGET', KEYS[1], 'v')
-if (cur or '-1') ~= ARGV[1] then return 0 end
-redis.call('HSET', KEYS[1], 'v', ARGV[2], 'data', ARGV[3])
-redis.call('EXPIRE', KEYS[1], ARGV[4])
-return 1
-`;
-
-export async function loadGame(id: string): Promise<Game | null> {
-  if (!redis) {
-    pruneMem();
-    const e = mem.get(id);
-    return e ? (JSON.parse(e.data) as Game) : null;
+/** First set env var among `names`, also accepting a custom integration prefix such as STORAGE_SUPABASE_URL. */
+function env(...names: string[]): string | undefined {
+  for (const n of names) if (process.env[n]) return process.env[n];
+  for (const n of names) {
+    const key = Object.keys(process.env).find((k) => k.endsWith("_" + n) && process.env[k]);
+    if (key) return process.env[key];
   }
-  const data = await redis.hget<string>(key(id), "data");
-  return data ? (JSON.parse(data) as Game) : null;
 }
 
-export async function loadVersion(id: string): Promise<number | null> {
-  if (!redis) {
-    pruneMem();
-    return mem.get(id)?.v ?? null;
-  }
-  const v = await redis.hget<string>(key(id), "v");
-  return v == null ? null : Number(v);
+const supabaseUrl = env("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL");
+const supabaseKey = env("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const backend: Backend =
+  supabaseUrl && supabaseKey
+    ? supabaseBackend(supabaseUrl, supabaseKey)
+    : redisUrl && redisToken
+      ? redisBackend(redisUrl, redisToken)
+      : memoryBackend;
+
+if (backend.name === "memory" && process.env.VERCEL) {
+  console.error("No database configured: connect Supabase (see README) so games are shared between servers.");
 }
+
+/** True when clients should listen for Supabase Realtime pushes instead of polling quickly. */
+export const realtimeEnabled = backend.name === "supabase";
+
+/** What the browser needs to subscribe to Realtime: the project URL and its public key. */
+const publicKey = env(
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_PUBLISHABLE_KEY",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "SUPABASE_ANON_KEY"
+);
+export const realtimeConfig = realtimeEnabled && publicKey ? { url: supabaseUrl!, key: publicKey } : null;
+export const storageBackend = backend.name;
+
+export class NotFound extends Error {}
+
+export const loadGame = (id: string) => backend.load(id);
+export const loadVersion = (id: string) => backend.loadVersion(id);
 
 /** Saves `game` if nobody else wrote since `expectedVersion` (-1 = must not exist). Bumps game.version. */
 export async function saveGame(game: Game, expectedVersion: number): Promise<boolean> {
-  const next = expectedVersion + 1;
-  game.version = next;
-  const data = JSON.stringify(game);
-  if (!redis) {
-    const cur = mem.get(game.id)?.v ?? -1;
-    if (cur !== expectedVersion) return false;
-    mem.set(game.id, { v: next, data, savedAt: Date.now() });
-    return true;
+  game.version = expectedVersion + 1;
+  const ok = await backend.save(game, expectedVersion);
+  if (ok && realtimeEnabled) {
+    await broadcastChange(supabaseUrl!, supabaseKey!, game.id, game.version).catch((e) =>
+      console.error("Realtime broadcast failed", e)
+    );
   }
-  const ok = await redis.eval(CAS, [key(game.id)], [String(expectedVersion), String(next), data, String(TTL_SECONDS)]);
-  return Number(ok) === 1;
+  return ok;
 }
 
 /** Load, mutate and save with optimistic retries. */
@@ -80,33 +77,13 @@ export async function updateGame<T>(id: string, fn: (game: Game) => T): Promise<
   throw new Error("The game is busy, please try again");
 }
 
-export class NotFound extends Error {}
-
-// ---------- admin ----------
+// ---------- admin and maintenance ----------
 
 /** Every stored game. Used only by the admin page, so a full scan is fine. */
-export async function listGames(): Promise<Game[]> {
-  if (!redis) {
-    pruneMem();
-    return [...mem.values()].map((e) => JSON.parse(e.data) as Game);
-  }
-  const keys: string[] = [];
-  let cursor = "0";
-  do {
-    const [next, batch] = await redis.scan(cursor, { match: key("*"), count: 200 });
-    cursor = String(next);
-    keys.push(...batch);
-  } while (cursor !== "0");
-  if (!keys.length) return [];
-  const pipe = redis.pipeline();
-  for (const k of keys) pipe.hget(k, "data");
-  const rows = (await pipe.exec()) as (string | null)[];
-  return rows.filter((d): d is string => !!d).map((d) => JSON.parse(d) as Game);
-}
+export const listGames = () => backend.list();
 
 /** Deletes the given games and returns how many existed. */
-export async function deleteGames(ids: string[]): Promise<number> {
-  if (!ids.length) return 0;
-  if (!redis) return ids.filter((id) => mem.delete(id)).length;
-  return redis.del(...ids.map(key));
-}
+export const deleteGames = (ids: string[]) => backend.remove(ids);
+
+/** Deletes games with no moves for 7 days. */
+export const cleanupExpired = () => backend.cleanup();

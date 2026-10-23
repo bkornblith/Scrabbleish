@@ -7,6 +7,7 @@ import { analyzePlay, exchangeLimit, idx, type BoardTile, type GameView, type Se
 import { SettingsForm } from "../../SettingsForm";
 import { Celebration, type CelebrationEvent } from "./Celebration";
 import { ThemeToggle } from "../../ThemeToggle";
+import { subscribeToGame, type RealtimeConfig } from "@/lib/realtime";
 
 type Placed = { tileId: string; letter: string; blank: boolean };
 type DropTarget = { cell: number } | { rackIdx: number } | null;
@@ -95,6 +96,10 @@ export function GameClient({ id }: { id: string }) {
     setView(v);
   }, []);
 
+  const [rtConfig, setRtConfig] = useState<RealtimeConfig | null>(null);
+  const liveRef = useRef(false); // Realtime connected: pushes tell us when to refresh
+  const kickRef = useRef<() => void>(() => {});
+
   const poll = useCallback(async () => {
     const since = versionRef.current;
     const res = await fetch(`/api/games/${id}${since != null ? `?since=${since}` : ""}`, {
@@ -108,13 +113,15 @@ export function GameClient({ id }: { id: string }) {
     if (!res.ok) return "same";
     const data = await res.json();
     if (!data.game) return "same";
+    if (data.realtime) setRtConfig((cur) => cur ?? data.realtime);
     applyView(data.game);
     return data.game.status === "finished" ? "stop" : "changed";
   }, [id, token, applyView]);
 
-  // Polling keeps free-tier usage low: it pauses while the tab is hidden (refreshing as soon as
-  // it's visible again), slows down when nothing has happened for a while, and stops once the
-  // game is over.
+  // With Supabase Realtime, a push tells us when to refresh and polling is only a slow safety
+  // net. Without it we poll quickly. Either way polling pauses while the tab is hidden (refreshing
+  // as soon as it's visible again), slows down when nothing has happened for a while, and stops
+  // once the game is over.
   useEffect(() => {
     versionRef.current = null;
     let stop = false;
@@ -128,10 +135,16 @@ export function GameClient({ id }: { id: string }) {
       } catch {}
       if (stop || myGen !== gen || result === "stop" || document.hidden) return;
       if (result === "changed") quietSince = Date.now();
-      const delay = Date.now() - quietSince > 120_000 ? 4000 : 1500;
+      const delay = liveRef.current ? 20_000 : Date.now() - quietSince > 120_000 ? 4000 : 1500;
       timer = setTimeout(() => loop(myGen), delay);
     };
     loop(gen);
+    kickRef.current = () => {
+      if (stop || document.hidden) return;
+      clearTimeout(timer);
+      quietSince = Date.now();
+      loop(++gen);
+    };
     const onVis = () => {
       clearTimeout(timer);
       if (!document.hidden) {
@@ -146,6 +159,21 @@ export function GameClient({ id }: { id: string }) {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [poll]);
+
+  const finished = view?.status === "finished";
+  useEffect(() => {
+    if (!rtConfig || finished) return;
+    return subscribeToGame(
+      rtConfig,
+      id,
+      () => kickRef.current(),
+      (connected) => {
+        const was = liveRef.current;
+        liveRef.current = connected;
+        if (was && !connected) kickRef.current(); // fall back to quick polling right away
+      }
+    );
+  }, [rtConfig, id, finished]);
 
   const act = useCallback(
     async (body: Record<string, unknown>) => {

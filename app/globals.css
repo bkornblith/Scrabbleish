@@ -411,3 +411,6 @@ button.primary:disabled, .btn.primary:disabled { background: var(--chip); color:
 .exchange-meta { display: flex; align-items: center; gap: 10px; margin: 12px 0 16px; font-size: 13px; }
 .exchange-meta .sp { flex: 1; }
 .modal .link-btn { border: 0; background: none; padding: 4px 2px; box-shadow: none; color: var(--accent); }
+
+/* No text selection or native image drag anywhere on the game table (it fights tile dragging). */
+.table .board, .table .rack, .table .rackrow, .tile, .sq-label { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }

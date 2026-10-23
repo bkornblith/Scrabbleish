@@ -498,6 +498,10 @@ function Table({
 
   function startPress(e: React.PointerEvent<HTMLElement>, tileId: string, fromCell: number | null) {
     if (exchangeMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+    // Stop the browser from starting a text selection or its own native drag (which shows a
+    // ghost image of the letters and highlights board labels).
+    if (e.pointerType === "mouse") e.preventDefault();
+    window.getSelection()?.removeAllRanges();
     pressRef.current = {
       tileId,
       fromCell,
@@ -578,7 +582,7 @@ function Table({
   const winnerScore = Math.max(...view.players.map((p) => p.score));
 
   return (
-    <main className="table">
+    <main className="table" onDragStart={(e) => e.preventDefault()}>
       <header className="topbar">
         <Link href="/" className="brand">
           <span className="brand-mark">S</span>

@@ -598,17 +598,6 @@ function Table({
 
       <div className="layout">
         <div className="board-col">
-          <StatusBanner
-            view={view}
-            myTurn={myTurn}
-            pendingAuthorName={pendingAuthor?.name}
-            isAuthor={!!me && view.pending?.playerId === me.id}
-            canChallenge={canChallenge}
-            mustAccept={mustAccept}
-            busy={busy}
-            onChallenge={challengeNow}
-            onAccept={() => act({ type: "accept" })}
-          />
 
           <div className="boardwrap">
             <div className="board">
@@ -692,57 +681,78 @@ function Table({
                 </button>
               </div>
 
-              <div className={`preview ${preview ? (preview.ok ? "ok" : "bad") : ""}`}>
-                {preview?.ok ? (
-                  <>
-                    {preview.words.map((w, i) => (
-                      <span key={i} className="word-chip">
-                        {w.word} <b>{w.score}</b>
-                      </span>
-                    ))}
-                    {preview.bingo && <span className="word-chip bingo">Bingo <b>50</b></span>}
-                  </>
-                ) : preview ? (
-                  preview.error
-                ) : myTurn ? (
-                  "Drag tiles onto the board, or tap a tile then a square"
-                ) : (
-                  "You can arrange tiles while you wait"
-                )}
-              </div>
-
-              <div className="controls">
-                    <button className="btn primary" disabled={!myTurn || busy || !preview?.ok || mustAccept} onClick={submitPlay}>
-                      {preview?.ok ? `Play for ${preview.score}` : "Play"}
-                    </button>
-                    <button
-                      className="btn"
-                      disabled={!myTurn || busy || mustAccept || swapLimit === 0}
-                      title={swapLimit === 0 ? "Exchanges need at least 7 tiles in the bag" : "Swap any of your tiles for new ones"}
-                      onClick={() => {
-                        recall();
-                        setExchangeSel(new Set());
-                        setExchangeMode(true);
-                      }}
-                    >
-                      Exchange
-                    </button>
-                    <button
-                      className="btn"
-                      disabled={!myTurn || busy || mustAccept}
-                      onClick={() => setConfirmBox({ title: "Pass your turn?", ok: "Pass", onOk: () => act({ type: "pass" }) })}
-                    >
-                      Pass
-                    </button>
-                    <button className="btn mobile-only" onClick={shuffleRack} aria-label="Shuffle rack">Shuffle</button>
-                    <button className="btn mobile-only" onClick={recall} disabled={placed.size === 0} aria-label="Recall tiles">Recall</button>
-              </div>
             </>
           )}
-          {error && <p className="error center">{error}</p>}
         </div>
 
         <aside className="side">
+          <div className="side-banner">
+            <StatusBanner
+              view={view}
+              myTurn={myTurn}
+              pendingAuthorName={pendingAuthor?.name}
+              isAuthor={!!me && view.pending?.playerId === me.id}
+              canChallenge={canChallenge}
+              mustAccept={mustAccept}
+              busy={busy}
+              onChallenge={challengeNow}
+              onAccept={() => act({ type: "accept" })}
+            />
+          </div>
+
+          {me && view.status === "playing" ? (
+            <section className="card actions">
+            <div className={`preview ${preview ? (preview.ok ? "ok" : "bad") : ""}`}>
+              {preview?.ok ? (
+                <>
+                  {preview.words.map((w, i) => (
+                    <span key={i} className="word-chip">
+                      {w.word} <b>{w.score}</b>
+                    </span>
+                  ))}
+                  {preview.bingo && <span className="word-chip bingo">Bingo <b>50</b></span>}
+                </>
+              ) : preview ? (
+                preview.error
+              ) : myTurn ? (
+                "Drag tiles onto the board, or tap a tile then a square"
+              ) : (
+                "You can arrange tiles while you wait"
+              )}
+            </div>
+
+            <div className="controls">
+                  <button className="btn primary" disabled={!myTurn || busy || !preview?.ok || mustAccept} onClick={submitPlay}>
+                    {preview?.ok ? `Play for ${preview.score}` : "Play"}
+                  </button>
+                  <button
+                    className="btn"
+                    disabled={!myTurn || busy || mustAccept || swapLimit === 0}
+                    title={swapLimit === 0 ? "Exchanges need at least 7 tiles in the bag" : "Swap any of your tiles for new ones"}
+                    onClick={() => {
+                      recall();
+                      setExchangeSel(new Set());
+                      setExchangeMode(true);
+                    }}
+                  >
+                    Exchange
+                  </button>
+                  <button
+                    className="btn"
+                    disabled={!myTurn || busy || mustAccept}
+                    onClick={() => setConfirmBox({ title: "Pass your turn?", ok: "Pass", onOk: () => act({ type: "pass" }) })}
+                  >
+                    Pass
+                  </button>
+                  <button className="btn mobile-only" onClick={shuffleRack} aria-label="Shuffle rack">Shuffle</button>
+                  <button className="btn mobile-only" onClick={recall} disabled={placed.size === 0} aria-label="Recall tiles">Recall</button>
+            </div>
+              {error && <p className="error center">{error}</p>}
+            </section>
+          ) : (
+            error && <p className="error center">{error}</p>
+          )}
+
           <section className="card">
             <h4>Players</h4>
             {view.players.map((p, i) => {

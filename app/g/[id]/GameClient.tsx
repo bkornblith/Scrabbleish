@@ -714,7 +714,7 @@ function Table({
                     <button
                       className="btn"
                       disabled={!myTurn || busy || mustAccept || swapLimit === 0}
-                      title={swapLimit === 0 ? "Not enough tiles left in the bag to exchange" : "Swap any of your tiles for new ones"}
+                      title={swapLimit === 0 ? "Exchanges need at least 7 tiles in the bag" : "Swap any of your tiles for new ones"}
                       onClick={() => {
                         recall();
                         setExchangeSel(new Set());
@@ -867,7 +867,7 @@ function Table({
               <button className="link-btn" onClick={() => setExchangeSel(new Set())}>Clear</button>
               <span className="sp" />
               <span className={exchangeSel.size > swapLimit ? "error" : "muted"}>
-                {view.bagCount} in bag{swapLimit < RACK_SIZE ? ` · max ${swapLimit}` : ""}
+                {view.bagCount} in bag
               </span>
             </div>
             <div className="modal-actions">

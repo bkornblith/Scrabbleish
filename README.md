@@ -9,8 +9,8 @@ Multiplayer Scrabble for 2–5 players, built with Next.js and ready to deploy o
 - Draw for first turn (closest to A goes first, blank beats everything).
 - First word must cover the centre star; every later word must connect. Tiles in one line, no gaps.
 - Premium squares count only on the turn they're covered. Blanks score 0. Using all 7 tiles is a 50-point bingo.
-- Exchange any subset of your rack on your turn, as long as the bag has enough tiles to replace them
-  (the host can switch to the official rule: only when 7+ tiles are left in the bag). Passing is allowed.
+- Exchange any subset of your rack on your turn, but only while at least 7 tiles are left in the bag
+  (official rule). Passing is allowed.
 - **Challenges (official Hasbro rule):** after a play, any opponent may challenge until the next player moves.
   If any word formed is not in the dictionary, the tiles go back to the player, they score 0 and lose the turn.
   If every word is valid, the challenger loses their next turn (the host can switch this to the tournament

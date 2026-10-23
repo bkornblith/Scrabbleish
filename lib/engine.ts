@@ -25,16 +25,12 @@ export type Settings = {
   failedChallenge: "lose-turn" | "bonus-5" | "none";
   /** "standard" = 100 tiles; "double" = two full sets (200 tiles) for bigger games. */
   bag: "standard" | "double";
-  /** "enough": exchange any number of tiles the bag can replace. "seven": official rule, the bag
-   *  must hold at least 7 tiles. */
-  exchangeRule?: "enough" | "seven";
 };
 
 export const DEFAULT_SETTINGS: Settings = {
   wordCheck: "challenge",
   failedChallenge: "lose-turn",
   bag: "standard",
-  exchangeRule: "enough",
 };
 
 export type Player = {
@@ -504,29 +500,25 @@ export function challenge(game: Game, challengerId: string, isWord: WordChecker)
 }
 
 /** How many tiles the current player may exchange right now (0 = none). */
-export function exchangeLimit(view: { bagCount: number; settings: Settings; pending: { playerId: string } | null; players: { id: string; rackCount: number }[] }) {
+export function exchangeLimit(view: { bagCount: number; pending: { playerId: string } | null; players: { id: string; rackCount: number }[] }) {
   const author = view.pending ? view.players.find((p) => p.id === view.pending!.playerId) : null;
   const bag = view.bagCount - (author ? Math.min(view.bagCount, RACK_SIZE - author.rackCount) : 0);
-  if ((view.settings.exchangeRule ?? "enough") === "seven") return bag >= RACK_SIZE ? RACK_SIZE : 0;
-  return Math.min(RACK_SIZE, Math.max(0, bag));
+  return bag >= RACK_SIZE ? RACK_SIZE : 0;
 }
 
 export function exchange(game: Game, playerId: string, tileIds: string[], rand: RandomInt = defaultRandom) {
   requireTurn(game, playerId);
   if (pendingWentOut(game)) throw new GameError("Accept or challenge the last play first");
   if (tileIds.length === 0) throw new GameError("Select tiles to exchange");
-  // Check against the bag *after* the pending play's author refills, since accepting happens first.
+  // Official rule: exchanging needs at least 7 tiles in the bag. Check against the bag *after*
+  // the pending play's author refills, since accepting happens first.
   const player = playerById(game, playerId);
   const ids = new Set(tileIds);
   if (ids.size !== tileIds.length || tileIds.some((id) => !player.rack.some((t) => t.id === id)))
     throw new GameError("That tile isn't on your rack");
   const pendAuthor = game.pending ? playerById(game, game.pending.playerId) : null;
   const bagAfterAccept = game.bag.length - (pendAuthor ? Math.min(game.bag.length, RACK_SIZE - pendAuthor.rack.length) : 0);
-  if ((game.settings.exchangeRule ?? "enough") === "seven") {
-    if (bagAfterAccept < RACK_SIZE) throw new GameError("You can only exchange when at least 7 tiles are left in the bag");
-  } else if (bagAfterAccept < tileIds.length) {
-    throw new GameError(`Only ${bagAfterAccept} tile${bagAfterAccept === 1 ? "" : "s"} left in the bag to swap with`);
-  }
+  if (bagAfterAccept < RACK_SIZE) throw new GameError("You can only exchange when at least 7 tiles are left in the bag");
 
   acceptPending(game);
   if (game.status !== "playing") return;

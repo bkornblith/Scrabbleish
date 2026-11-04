@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin, summarize } from "@/lib/admin";
-import { deleteGames, listGames } from "@/lib/store";
+import { deleteGames, listGames, storageBackend } from "@/lib/store";
 import { errorResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (!isAdmin(req)) return denied();
   try {
     const games = (await listGames()).map(summarize).sort((a, b) => b.lastActivity - a.lastActivity);
-    return NextResponse.json({ games });
+    return NextResponse.json({ games, backend: storageBackend });
   } catch (e) {
     return errorResponse(e);
   }

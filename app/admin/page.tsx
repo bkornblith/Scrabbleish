@@ -28,6 +28,7 @@ export default function Admin() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
+  const [backend, setBackend] = useState("");
 
   const load = useCallback(async (pw: string) => {
     setBusy(true);
@@ -44,6 +45,7 @@ export default function Admin() {
       try { sessionStorage.setItem(PW_KEY, pw); } catch {}
       setPassword(pw);
       setGames(data.games);
+      setBackend(data.backend ?? "");
       setNow(Date.now());
       setSelected((sel) => new Set([...sel].filter((id) => data.games.some((g: GameSummary) => g.id === id))));
     } catch (e) {
@@ -226,7 +228,10 @@ export default function Admin() {
           </div>
         )}
       </section>
-      <p className={s.note}>Games with no moves for 7 days are also removed automatically every morning.</p>
+      <p className={s.note}>
+        Games with no moves for 7 days are also removed automatically every morning.
+        {backend && ` Stored in ${backend === "postgres" ? "Postgres (Neon)" : backend}.`}
+      </p>
 
       {confirmIds && (
         <div className="modal-bg" onClick={() => setConfirmIds(null)}>

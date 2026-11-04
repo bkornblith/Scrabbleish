@@ -1,14 +1,16 @@
 import type { Game } from "./engine";
 import { memoryBackend } from "./backends/memory";
+import { postgresBackend } from "./backends/postgres";
 import { redisBackend } from "./backends/redis";
 import { broadcastChange, supabaseBackend } from "./backends/supabase";
 import type { Backend } from "./backends/types";
 
 // Where games live, in order of preference:
-//  1. Supabase Postgres + Realtime (instant updates, free tier) when its URL and secret key are set
-//  2. Upstash Redis (polling) when its REST credentials are set
-//  3. Process memory, for local development
-// Every serverless instance must share state, so production needs 1 or 2.
+//  1. Plain Postgres (Neon via Vercel Storage) when DATABASE_URL is set; clients poll
+//  2. Supabase Postgres + Realtime (instant updates) when its URL and secret key are set
+//  3. Upstash Redis (polling) when its REST credentials are set
+//  4. Process memory, for local development
+// Every serverless instance must share state, so production needs one of 1–3.
 
 /** First set env var among `names`, also accepting a custom integration prefix such as STORAGE_SUPABASE_URL. */
 function env(...names: string[]): string | undefined {
@@ -19,20 +21,23 @@ function env(...names: string[]): string | undefined {
   }
 }
 
+// Only DATABASE_URL: the Supabase integration also sets POSTGRES_URL, which must not win over it.
+const databaseUrl = process.env.DATABASE_URL;
 const supabaseUrl = env("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL");
 const supabaseKey = env("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY");
 const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const backend: Backend =
-  supabaseUrl && supabaseKey
+const backend: Backend = databaseUrl
+  ? postgresBackend(databaseUrl)
+  : supabaseUrl && supabaseKey
     ? supabaseBackend(supabaseUrl, supabaseKey)
     : redisUrl && redisToken
       ? redisBackend(redisUrl, redisToken)
       : memoryBackend;
 
 if (backend.name === "memory" && process.env.VERCEL) {
-  console.error("No database configured: connect Supabase (see README) so games are shared between servers.");
+  console.error("No database configured: connect Neon from Vercel Storage (see README) so games are shared between servers.");
 }
 
 /** True when clients should listen for Supabase Realtime pushes instead of polling quickly. */

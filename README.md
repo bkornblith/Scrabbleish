@@ -45,25 +45,22 @@ in a second browser window or another device on your network).
 ## Deploy on Vercel
 
 1. In Vercel, **Add New → Project** and import this GitHub repo (framework: Next.js, no settings to change).
-2. In the project, open **Storage → Supabase** (free plan) and connect it to the project with an empty
-   custom prefix. This adds `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` and
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which the app picks up automatically.
-3. In the Supabase dashboard, open **SQL Editor** and run [`supabase/schema.sql`](supabase/schema.sql)
-   (one `games` table, locked down so only the server's secret key can touch it).
-4. Optional: add a `CRON_SECRET` env var (any long random string) so only Vercel can trigger the daily cleanup.
-5. Redeploy. Create a game, share the link, play.
+2. In the project, open **Storage → Create Database → Neon** (free plan) and connect it to the project with an
+   empty custom prefix. This adds `DATABASE_URL`, which the app picks up automatically. The `games` table is
+   created on first use, so there is nothing to run by hand.
+3. Optional: add a `CRON_SECRET` env var (any long random string) so only Vercel can trigger the daily cleanup.
+4. Redeploy. Create a game, share the link, play.
 
-A database is needed because Vercel's serverless functions don't share memory. After every move the server
-sends a tiny "game changed" broadcast over Supabase Realtime and each player re-fetches their own view
-(racks are never broadcast). Clients still check every 20 seconds as a safety net, pause while the tab is
-hidden, and stop when the game ends.
+A database is needed because Vercel's serverless functions don't share memory. Clients poll for updates every
+1.5 seconds while the tab is visible (a single cheap version check unless something changed), slow to every
+4 seconds after two quiet minutes, pause while the tab is hidden, and stop when the game ends. Neon's free plan
+scales the database to zero when idle and wakes it on the next request; it never pauses the project.
 
-A daily Vercel cron (`/api/cron/cleanup`, see `vercel.json`) deletes games with no moves for 7 days. It also
-keeps the Supabase project active, since free projects pause after about a week without traffic. If it ever
-does pause, restore it from the Supabase dashboard.
+A daily Vercel cron (`/api/cron/cleanup`, see `vercel.json`) deletes games with no moves for 7 days.
 
-Upstash Redis (`KV_REST_API_URL` / `KV_REST_API_TOKEN`) is still supported as a fallback: without Supabase
-the app stores games in Redis and polls every 1.5 seconds instead. Supabase wins when both are configured.
+Other backends still work if `DATABASE_URL` isn't set, in this order: Supabase (`SUPABASE_URL` plus
+`SUPABASE_SERVICE_ROLE_KEY`, with Realtime push updates; run [`supabase/schema.sql`](supabase/schema.sql) once),
+then Upstash Redis (`KV_REST_API_URL` / `KV_REST_API_TOKEN`), then in-memory storage for local play.
 
 ## Admin
 
@@ -76,7 +73,7 @@ The password comes from the `ADMIN_PASSWORD` env var and defaults to `admin`; se
 - `lib/constants.ts`: board layout, tile values, distribution
 - `lib/engine.ts`: pure game rules (placement, scoring, challenges, turn flow, per-player views)
 - `lib/dictionary.ts`: word lookup
-- `lib/store.ts`, `lib/backends/`: storage with compare-and-set (Supabase, Redis or in-memory)
+- `lib/store.ts`, `lib/backends/`: storage with compare-and-set (Postgres, Supabase, Redis or in-memory)
 - `lib/realtime.ts`: browser subscription to Supabase Realtime
 - `app/api/games/...`: create / poll / action endpoints
 - `app/g/[id]/`: the game screen

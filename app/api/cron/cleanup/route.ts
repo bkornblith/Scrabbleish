@@ -3,8 +3,7 @@ import { cleanupExpired, storageBackend } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-// Runs daily (see vercel.json). Deletes games with no moves for 7 days, and the database query
-// also counts as activity, which keeps a free Supabase project from being paused when idle.
+// Runs daily (see vercel.json). Deletes games with no moves for 7 days.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
